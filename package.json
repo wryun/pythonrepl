@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "esbuild": "^0.12.4",
+    "skulpt": "^1.2.0"
+  },
+  "scripts": {
+    "serve": "esbuild src/app.js --servedir=www --outdir=www/js"
+  }
+}
