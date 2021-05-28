@@ -2,9 +2,13 @@ import 'skulpt'
 
 window.onload = () => {
     const textConsole = document.getElementById('python-console');
+    //window.addEventListener('click', () => textConsole.focus());
+    window.addEventListener('paste', textConsole.onPaste.bind(textConsole), true);
+
     const turtle = document.getElementById('turtle-canvas');
     const repl = new PythonRepl(textConsole, turtle);
-    repl.run()
+    textConsole.focus();
+    repl.run();
 };
 
 
@@ -106,6 +110,22 @@ class TextConsole extends HTMLElement {
 
     showPrompt() {
         this.output(this.prompt);
+    }
+
+    onPaste(event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const lines = event.clipboardData.getData('text').split('\n');
+        if (lines.length > 1) {
+          for (const line of lines.slice(0, -1)) {
+            this.currentLine += line + '\n';
+            this.output(line + '\n');
+            this.onEnter();
+          }
+        }
+        this.currentLine += lines[lines.length - 1];
+        this.output(lines[lines.length - 1]);
     }
 
     onKeydown(event) {
