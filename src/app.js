@@ -24,16 +24,66 @@ class PythonRepl {
         this.turtleCanvas = turtleCanvas;
 
         this.initSkulpt();
+
+        this.plainText = {};
+
+        this.textConsole.addEditorHook((input) => {
+            const trimmedInput = input.trim();
+            if (!this.canMutate(trimmedInput)) {
+                return;
+            }
+
+            return this.plainText[trimmedInput] || Sk.builtin.repr(Sk.globals[trimmedInput]).v;
+        }, async (input, output) => {
+            const trimmedInput = input.trim();
+            // TODO If this throws an Exception, the editor save should handle.
+            const res = await this.runCode(`${trimmedInput} = ${output}`);
+            this.plainText[trimmedInput] = output;
+        });
+
+        this.textConsole.addRealtimeEditorHook((input) => {
+            if (/^(def|class\s*.*:$)/.match(input.trim())) {
+                return input.trim();
+            }
+        }, async (_, output) => {
+            // TODO If this throws an Exception, the editor save should handle.
+            const res = await this.runCode(`${output}`);
+        });
+    }
+
+    canMutate(varName) {
+        const val = Sk.globals[varName];
+        if (val === undefined) {
+            return false;
+        }
+
+        if (val instanceof Sk.builtins['function'] && !(trimmedInput in this.plainText)) {
+            return false;
+        }
+
+        // How to distinguish between things that have sane reprs and those that don't?
+        return true;
     }
 
     async run() {
         while (true) {
             this.textConsole.showPrompt();
             const input = await this.textConsole.readline();
-            if (input.trim() === '') {
+            const trimmedInput = input.trim();
+            if (trimmedInput === '') {
                 continue;
             }
-            await this.runCode(`__result = ${input}\nif __result is not None: print(repr(__result))`);
+
+            const res = await this.runCode(input);
+            window.res = res;
+            if (res === undefined) {
+                continue
+            }
+
+            if (res.$d['__last_expr_result__'] !== Sk.builtin.none.none$) {
+                this.textConsole.output(Sk.builtin.repr(res.$d['__last_expr_result__']).v);
+            }
+            delete res.$d['__last_expr_result__'];
         }
     }
 
@@ -43,6 +93,8 @@ class PythonRepl {
                 return Sk.importMainWithBody("<stdin>", false, code, true);
             })
         } catch (e) {
+            // TODO detect unterminated multi-line exception and trigger editor here.
+            // Err... in appropriate circumstances. Not all runCode. Refactor.
             if (e instanceof Sk.builtin.BaseException) {
                 this.textConsole.output(e.toString() + '\n');
             } else {
@@ -86,6 +138,12 @@ class TextConsole extends HTMLElement {
         this.prompt = this.getAttribute('data-prompt');
         this.output(this.getAttribute('data-intro') + '\n');
         this.addEventListener('keydown', this.onKeydown.bind(this), true);
+    }
+
+    addEditorHook(detectFn, saveFn) {
+    }
+
+    addRealtimeEditorHook(detectFn, saveFn) {
     }
 
     async readline() {
