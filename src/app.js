@@ -1,4 +1,4 @@
-import 'skulpt'
+import 'skulpt';
 
 window.onload = () => {
     const textConsole = document.getElementById('python-console');
@@ -27,27 +27,29 @@ class PythonRepl {
 
         this.plainText = {};
 
+        // Edit existing var by typing the variable on its own.
         this.textConsole.addEditorHook((input) => {
             const trimmedInput = input.trim();
-            if (!this.canMutate(trimmedInput)) {
+            const value = Sk.globals[trimmedInput];
+            if (value === undefined) {
                 return;
             }
 
-            return this.plainText[trimmedInput] || Sk.builtin.repr(Sk.globals[trimmedInput]).v;
-        }, async (input, output) => {
-            const trimmedInput = input.trim();
-            // TODO If this throws an Exception, the editor save should handle.
-            const res = await this.runCode(`${trimmedInput} = ${output}`);
-            this.plainText[trimmedInput] = output;
+            if (this.plainText[trimmedInput] !== undefined) {
+              return this.plainText[trimmedInput];
+            } else if (value instanceof Sk.builtins['function']) {
+              return;
+            } else {
+              return `${trimmedInput} = ${Sk.builtin.repr(value).v}`;
+            }
         });
 
-        this.textConsole.addRealtimeEditorHook((input) => {
-            if (/^(def|class\s*.*:$)/.match(input.trim())) {
+        // Defining function/class.
+        // TODO - replace with continuation exception
+        this.textConsole.addEditorHook((input) => {
+            if (input.trim().match(/^(def|class\s*.*:$)/)) {
                 return input.trim();
             }
-        }, async (_, output) => {
-            // TODO If this throws an Exception, the editor save should handle.
-            const res = await this.runCode(`${output}`);
         });
     }
 
@@ -58,6 +60,9 @@ class PythonRepl {
         }
 
         if (val instanceof Sk.builtins['function'] && !(trimmedInput in this.plainText)) {
+            // TOOD At some point, this should probably be upgraded to integrate
+            // with Skulpt more (i.e. Skulpt can maintain plain text representations of
+            // everything rather than us).
             return false;
         }
 
@@ -74,14 +79,27 @@ class PythonRepl {
                 continue;
             }
 
+            // TODO - integrate with Skulpt to identify when globals were redefined rather than brute-force ugly?
+            const oldGlobals = {...Sk.globals};
+            // Parse AST first before running to check that only one thing is defined and possibly prevent
+            // invalid saves... (or rather, have a separate path for handling invalid saves into this.plainText).
             const res = await this.runCode(input);
             window.res = res;
             if (res === undefined) {
                 continue
             }
+            const changes = Object.entries(Sk.globals).filter(([k, v]) => v !== oldGlobals[k]);
+            if (changes.length !== 1) {
+              // TODO - shouldn't happen.
+              // (really, need to parse AST to prevent this before we eval, and make sure k is sane)
+              return;
+            }
+            for (const [k, v] of changes) {
+              this.plainText[k] = input;
+            }
 
             if (res.$d['__last_expr_result__'] !== Sk.builtin.none.none$) {
-                this.textConsole.output(Sk.builtin.repr(res.$d['__last_expr_result__']).v);
+                this.textConsole.output(Sk.builtin.repr(res.$d['__last_expr_result__']).v + '\n');
             }
             delete res.$d['__last_expr_result__'];
         }
@@ -94,6 +112,7 @@ class PythonRepl {
             })
         } catch (e) {
             // TODO detect unterminated multi-line exception and trigger editor here.
+            // This could avoid the realtime hook as well...
             // Err... in appropriate circumstances. Not all runCode. Refactor.
             if (e instanceof Sk.builtin.BaseException) {
                 this.textConsole.output(e.toString() + '\n');
@@ -126,6 +145,8 @@ class TextConsole extends HTMLElement {
         this.currentLine = '';
         this.oldLines = [];
 
+        this.editorHooks = [];
+
         this.shadow = this.attachShadow({mode: 'open'});
         const template = document.getElementById('consoletemplate').content.cloneNode(true)
         this.shadow.append(template);
@@ -140,10 +161,8 @@ class TextConsole extends HTMLElement {
         this.addEventListener('keydown', this.onKeydown.bind(this), true);
     }
 
-    addEditorHook(detectFn, saveFn) {
-    }
-
-    addRealtimeEditorHook(detectFn, saveFn) {
+    addEditorHook(detectFn) {
+        this.editorHooks.push(detectFn);
     }
 
     async readline() {
@@ -222,6 +241,13 @@ class TextConsole extends HTMLElement {
 
     onEnter() {
         if (this.readlinePromise) {
+            for (const hook of this.editorHooks) {
+              // TODO handle oldLines in buffer...
+              const proposedInput = hook(this.currentLine);
+              if (proposedInput) {
+                console.log('should be spawning editor');
+              }
+            }
             this.readlinePromiseResolve(this.currentLine);
             this.readlinePromise = null;
         } else {
