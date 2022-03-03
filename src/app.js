@@ -16,7 +16,16 @@ window.onload = () => {
 
 const INIT_SCRIPT = `
 from turtle import *
+from random import *
 shape('turtle')
+
+def help():
+    print("Hi Tulsi! I haven't written much help yet.\\n")
+    print('Try writing this:\\n')
+    print("color 'green'")
+    print('repeat 20:')
+    print('  fd 100')
+    print('  rt 100')
 `;
 
 
@@ -75,10 +84,14 @@ class PythonRepl {
     async run() {
         while (true) {
             this.textConsole.showPrompt();
-            const input = await this.textConsole.readline();
+            let input = await this.textConsole.readline();
             const trimmedInput = input.trim();
             if (trimmedInput === '') {
                 continue;
+            }
+
+            if (trimmedInput == 'help') {
+                input = 'help()';
             }
 
             // TODO - integrate with Skulpt to identify when globals were redefined rather than brute-force ugly?

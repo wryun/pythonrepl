@@ -6,6 +6,7 @@
     "skulpt": "file:../skulpt"
   },
   "scripts": {
-    "serve": "esbuild --bundle src/app.js --servedir=www --outdir=www/js"
+    "serve": "esbuild --bundle src/app.js --servedir=docs --outdir=docs/js",
+    "build": "esbuild --bundle src/app.js --minify --outfile=docs/js/app.js"
   }
 }
