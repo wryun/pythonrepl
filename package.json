@@ -1,5 +1,7 @@
 {
   "dependencies": {
+    "@codemirror/basic-setup": "^0.18.2",
+    "@codemirror/lang-python": "^0.18.0",
     "esbuild": "^0.12.14",
     "skulpt": "file:../skulpt"
   },
